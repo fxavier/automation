@@ -36,6 +36,11 @@ class DHIS2Importer(QWidget):
         upload_button.clicked.connect(self.upload_data)
         layout.addWidget(upload_button)
 
+        # Close button
+        close_button = QPushButton("Close", self)
+        close_button.clicked.connect(self.close)
+        layout.addWidget(close_button)
+
         # Add progress bar and percentage label to layout
         layout.addWidget(self.progress_bar)
         layout.addWidget(self.percentage_label)
@@ -71,15 +76,8 @@ class DHIS2Importer(QWidget):
                 dhis2_url,
                 headers=headers,
                 data=file,
-                auth=HTTPBasicAuth(username, password),
-                stream=True  # Enable streaming
+                auth=HTTPBasicAuth(username, password)
             )
-
-            for chunk in response.iter_content(chunk_size=8192):  # Read in chunks
-                uploaded_size += len(chunk)
-                percent = (uploaded_size / total_size) * 100
-                self.progress_bar.setValue(int(percent))  # Update progress bar with integer value
-                self.percentage_label.setText(f"{int(percent)}%")  # Update percentage label
 
         # Hide progress bar after request
         self.progress_bar.setVisible(False)  # Hide progress bar
@@ -87,7 +85,12 @@ class DHIS2Importer(QWidget):
 
         # Check the response status
         if response.status_code == 200:
-            QMessageBox.information(self, "Success", "Data imported successfully!")
+            response_json = response.json()
+            message = {
+                "status": "SUCCESS",
+                "importCount": response_json.get("importCount", {})
+            }
+            QMessageBox.information(self, "Success", f"Data imported successfully!\n{message}")
         else:
             QMessageBox.critical(self, "Error", f"Failed to import data. Status code: {response.status_code}\nResponse: {response.text}")
 
