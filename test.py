@@ -1,195 +1,119 @@
 import sys
 from PyQt5.QtWidgets import (
-    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
-    QFileDialog, QMessageBox, QProgressBar
+    QApplication, QMainWindow, QVBoxLayout, QWidget, QLabel, QComboBox, QPushButton, QMessageBox
 )
-import openpyxl
+from openpyxl import Workbook
 
-class ExcelMerger(QWidget):
+class DHIS2PeriodSelector(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.init_ui()
 
-    def init_ui(self):
-        self.setWindowTitle("Excel File Merger")
+        self.initUI()
 
-        # Layouts
-        layout = QVBoxLayout()
-        layout_files = QHBoxLayout()
-        layout_files_two = QHBoxLayout()
+    def initUI(self):
+        self.setWindowTitle('DHIS2 Period Selector')
+        self.setGeometry(100, 100, 400, 200)
 
-        # File selection for multiple files
-        label_files = QLabel("Select Excel Files (Multiple):")
-        self.entry_files = QLineEdit(self)
-        btn_files = QPushButton("Browse")
-        btn_files.clicked.connect(self.select_files)
+        main_layout = QVBoxLayout()
 
-        layout_files.addWidget(label_files)
-        layout_files.addWidget(self.entry_files)
-        layout_files.addWidget(btn_files)
+        # Period Type Combobox
+        self.period_type_label = QLabel('Period Type:', self)
+        self.period_type_combo = QComboBox(self)
+        self.period_type_combo.addItems(['Monthly', 'Quarterly', 'Semi-annual', 'Annual'])
+        main_layout.addWidget(self.period_type_label)
+        main_layout.addWidget(self.period_type_combo)
 
-        # File selection for two files
-        label_files_two = QLabel("Select Two Excel Files:")
-        self.entry_files_two = QLineEdit(self)
-        btn_files_two = QPushButton("Browse")
-        btn_files_two.clicked.connect(self.select_two_files)
+        # Year Combobox
+        self.year_label = QLabel('Year:', self)
+        self.year_combo = QComboBox(self)
+        self.year_combo.addItems([str(year) for year in range(2019, 2027)])
+        main_layout.addWidget(self.year_label)
+        main_layout.addWidget(self.year_combo)
 
-        layout_files_two.addWidget(label_files_two)
-        layout_files_two.addWidget(self.entry_files_two)
-        layout_files_two.addWidget(btn_files_two)
+        # Period Combobox
+        self.period_label = QLabel('Period:', self)
+        self.period_combo = QComboBox(self)
+        self.update_periods()
+        main_layout.addWidget(self.period_label)
+        main_layout.addWidget(self.period_combo)
 
-        # Progress bars
-        self.progress_bar_multiple = QProgressBar(self)
-        self.progress_bar_multiple.setMinimum(0)
-        self.progress_bar_multiple.setValue(0)
+        # Update periods when period type or year changes
+        self.period_type_combo.currentIndexChanged.connect(self.update_periods)
+        self.year_combo.currentIndexChanged.connect(self.update_periods)
 
-        self.progress_bar_two_files = QProgressBar(self)
-        self.progress_bar_two_files.setMinimum(0)
-        self.progress_bar_two_files.setValue(0)
+        # Submit Button
+        self.submit_button = QPushButton('Submit', self)
+        self.submit_button.clicked.connect(self.submit)
+        main_layout.addWidget(self.submit_button)
 
-        # Merge buttons
-        btn_merge = QPushButton("Merge Multiple Files")
-        btn_merge.setStyleSheet("background-color: green; color: white;")
-        btn_merge.clicked.connect(self.merge_files)
+        container = QWidget()
+        container.setLayout(main_layout)
+        self.setCentralWidget(container)
 
-        btn_merge_two = QPushButton("Mapping Files")
-        btn_merge_two.setStyleSheet("background-color: blue; color: white;")
-        btn_merge_two.clicked.connect(self.merge_two_files)
+    def update_periods(self):
+        period_type = self.period_type_combo.currentText()
+        year = int(self.year_combo.currentText())
+        self.period_combo.clear()
 
-        # Close button
-        btn_close = QPushButton("Close")
-        btn_close.clicked.connect(self.close_application)
+        if period_type == 'Monthly':
+            months = [
+                'January', 'February', 'March', 'April', 'May', 'June',
+                'July', 'August', 'September', 'October', 'November', 'December'
+            ]
+            self.period_combo.addItems([f'{month}-{year}' for month in months])
+        elif period_type == 'Quarterly':
+            self.period_combo.addItems([
+                f'January to March {year}', 
+                f'April to June {year}', 
+                f'July to October {year}', 
+                f'September to December {year}'
+            ])
+        elif period_type == 'Semi-annual':
+            self.period_combo.addItems([
+                f'April - September {year}',
+                f'October - March {year + 1}'
+            ])
+        elif period_type == 'Annual':
+            self.period_combo.addItems([
+                f'October {year -1 } - September {year}'
+            ])
 
-        # Add layouts to main layout
-        layout.addLayout(layout_files)
-        layout.addWidget(self.progress_bar_multiple)
-        layout.addLayout(layout_files_two)
-        layout.addWidget(self.progress_bar_two_files)
-        layout.addWidget(btn_merge)
-        layout.addWidget(btn_merge_two)
-        layout.addWidget(btn_close)
+    def submit(self):
+        period_type = self.period_type_combo.currentText()
+        year = int(self.year_combo.currentText())
+        period = self.period_combo.currentText()
 
-        self.setLayout(layout)
+        # Determine the period code
+        if period_type == 'Monthly':
+            month = period.split('-')[0]
+            month_number = {
+                'January': '01', 'February': '02', 'March': '03', 'April': '04',
+                'May': '05', 'June': '06', 'July': '07', 'August': '08',
+                'September': '09', 'October': '10', 'November': '11', 'December': '12'
+            }[month]
+            period_code = f'{year}{month_number}'
+        elif period_type == 'Quarterly':
+            quarter = period.split(' ')[0]
+            quarter_number = {
+                'January': 'Q1', 'April': 'Q2', 'July': 'Q3', 'September': 'Q4'
+            }[quarter]
+            period_code = f'{year}{quarter_number}'
+        elif period_type == 'Semi-annual':
+            semi_annual = period.split(' ')[0]
+            semi_annual_code = {
+                'April': 'AprilS1', 'October': 'AprilS2'
+            }[semi_annual]
+            period_code = f'{year}{semi_annual_code}'
+        elif period_type == 'Annual':
+            period_code = f'{year-1}Oct'
 
-    def select_files(self):
-        files, _ = QFileDialog.getOpenFileNames(self, "Select Excel Files", "", "Excel files (*.xlsx *.xls)")
-        if files:
-            self.entry_files.setText(";".join(files))
+        # Print the period code in the terminal
+        print(f'Period Code: {period_code}')
 
-    def select_two_files(self):
-        files, _ = QFileDialog.getOpenFileNames(self, "Select Two Excel Files", "", "Excel files (*.xlsx *.xls)")
-        if len(files) == 2:
-            self.entry_files_two.setText(";".join(files))
-        else:
-            QMessageBox.warning(self, "Warning", "Please select exactly two Excel files.")
-
-    def merge_files(self):
-        file_paths = self.entry_files.text().split(';')
-
-        if not file_paths or len(file_paths) < 2:
-            QMessageBox.warning(self, "Warning", "Please select at least two Excel files.")
-            return
-
-        try:
-            wb_dst = openpyxl.load_workbook(file_paths[0])
-
-            total_steps = len(file_paths) - 1
-            self.progress_bar_multiple.setMaximum(total_steps)
-
-            for idx, file_path in enumerate(file_paths[1:], start=1):
-                wb_src = openpyxl.load_workbook(file_path)
-
-                for ws_src in wb_src.worksheets:
-                    if ws_src.title in wb_dst.sheetnames:
-                        ws_dst = wb_dst[ws_src.title]
-                    else:
-                        ws_dst = wb_dst.create_sheet(ws_src.title)
-
-                    for row in ws_src.iter_rows(min_row=8, values_only=True):
-                        if any(row):
-                            ws_dst.append(row)
-
-                self.progress_bar_multiple.setValue(idx)
-                QApplication.processEvents()
-
-            merged_file_path, _ = QFileDialog.getSaveFileName(self, "Save Merged File", "", "Excel files (*.xlsx)")
-            if merged_file_path:
-                wb_dst.save(merged_file_path)
-                QMessageBox.information(self, "Success", "Files merged successfully!")
-        except Exception as e:
-            QMessageBox.critical(self, "Error", f"An error occurred: {e}")
-
-    def merge_two_files(self):
-        file_paths = self.entry_files_two.text().split(';')
-
-        if not file_paths or len(file_paths) != 2:
-            QMessageBox.warning(self, "Warning", "Please select exactly two Excel files.")
-            return
-
-        try:
-            wb_dst = openpyxl.load_workbook(file_paths[0])
-            wb_src = openpyxl.load_workbook(file_paths[1])
-
-            total_sheets = len(wb_src.worksheets)
-            self.progress_bar_two_files.setMaximum(total_sheets)
-
-            for idx, ws_src in enumerate(wb_src.worksheets, start=1):
-                if ws_src.title in wb_dst.sheetnames:
-                    ws_dst = wb_dst[ws_src.title]
-                else:
-                    ws_dst = wb_dst.create_sheet(ws_src.title)
-
-                # Copy rows from the 8th row of the source sheet
-                for row in ws_src.iter_rows(min_row=8, values_only=True):
-                    if any(row):  # Check if the row is not entirely empty
-                        ws_dst.append(row)
-
-                # Move the last non-empty line to line 8
-                self.move_last_non_empty_line(ws_dst)
-
-                # Update progress bar for merging two files
-                self.progress_bar_two_files.setValue(idx)
-                QApplication.processEvents()
-
-            merged_file_path, _ = QFileDialog.getSaveFileName(self, "Save Merged File", "", "Excel files (*.xlsx)")
-            if merged_file_path:
-                wb_dst.save(merged_file_path)
-                QMessageBox.information(self, "Success", "Files merged successfully!")
-        except Exception as e:
-            QMessageBox.critical(self, "Error", f"An error occurred: {e}")
-
-    def move_last_non_empty_line(self, worksheet):
-        """Move the last non-empty line to line 8, shifting down the remaining data."""
-        max_row = worksheet.max_row
-        last_non_empty_row = max_row
-
-        # Find the last non-empty row
-        for row in range(max_row, 0, -1):
-            if any(worksheet.cell(row=row, column=col).value not in (None, '', ' ') for col in range(1, worksheet.max_column + 1)):
-                last_non_empty_row = row
-                break
-
-        # Extract the values from the last non-empty row
-        last_row_values = [worksheet.cell(row=last_non_empty_row, column=col).value for col in range(1, worksheet.max_column + 1)]
-
-        # Delete the last non-empty row
-        worksheet.delete_rows(last_non_empty_row)
-
-        # Shift all rows from line 8 down by one row
-        worksheet.insert_rows(8)
-
-        # Paste the extracted values into line 8
-        for col, value in enumerate(last_row_values, start=1):
-            worksheet.cell(row=8, column=col, value=value)
-
-    def close_application(self):
-        self.close()
-
-def main():
-    app = QApplication(sys.argv)
-    merger = ExcelMerger()
-    merger.show()
-    sys.exit(app.exec_())
+        QMessageBox.information(self, 'Success', f'Period code: {period_code}')
 
 if __name__ == '__main__':
-    main()
+    app = QApplication(sys.argv)
+    window = DHIS2PeriodSelector()
+    window.show()
+    sys.exit(app.exec_())
